@@ -14,6 +14,16 @@ const typeSchema = new Schema<TypeSchema>({
   }
 });
 
+const formatDate = (date: Date): string => {
+  const pad = (value: number): string => String(value).padStart(2,'0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
 
 interface Validator {
   required:boolean;
@@ -29,11 +39,25 @@ const validatorHandle = <T extends Record<string,Validator>>(validtor: T) => {
   return (req:Request,res:Response,next:NextFunction) => {
     for(const [key,value] of Object.entries(validtor)){
       if(value.required){
-        if(!req.body[key]){
+        if(!(key in req.body)){
+          return res.json({
+            status:1,
+            message:`${key}为必传项`
+          });
+        }
+        let type = value.type;
+        if(type === "number" && !value && value != 0){
           return res.json({
             status:1,
             message:`${key}不能为空`
           });
+        }else if(type === 'boolean'){
+          if(typeof  value !== type){
+            return res.json({
+              status:1,
+              message:`${key}必须是false或者true`
+            });
+          }
         }
       }
     }
@@ -56,9 +80,16 @@ router.put("/modify",validatorHandle(modifyValidator),async (req:Request,res:Res
   let _id = req.body._id;
   let name = req.body.name;
   try{
-    await TypeModel.updateOne({_id},{name});
+    let updateRes = await TypeModel.updateOne({_id},{name});
+    res.json({
+      status:0,
+      message:"修改成功"
+    });
   }catch(e){
-    console.log(e);
+    res.json({
+      status:1,
+      message:"修改失败"
+    });
   }
 })
 router.post("/delete",async (req:Request,res:Response) => { 
@@ -73,8 +104,8 @@ router.post("/delete",async (req:Request,res:Response) => {
       status:0,
       message:"删除成功"
     });
-  }catch(e){
-    console.log(e);
+  }catch(error){
+    throw error;
   }
 })
 router.post("/add",async (req,res) => {
@@ -86,33 +117,35 @@ router.post("/add",async (req,res) => {
     name:req.body.name,
     created_time:new Date()
   });
-  console.log(req.body)
   try{
     let createRes = await booksType.save();
-    console.log(createRes)
     res.json({
       status:0,
       data:{
         _id:createRes._id,
         name:createRes.name,
-        created_time:createRes.created_time
+        created_time:formatDate(createRes.created_time)
       },
       message:"创建成功"
     });
-  }catch(e){
-    console.log(e);
+  }catch(error){
+    throw error;
   }
 });
 router.get("/list",async (req:Request,res:Response) => {
-  let list: object[] = [];
   try{
-    list = await TypeModel.find({},{__v:0}).sort({created_time:-1});
+    const list = await TypeModel.find({},{__v:0}).sort({created_time:-1}).lean();
+    const data = list.map((item) => ({
+      ...item,
+      name:item.name || "",
+      created_time:formatDate(item.created_time)
+    }));
     res.json({
       status:0,
-      data:list
+      data
     });
-  }catch(e){
-    console.log(e);
+  }catch(error){
+    throw error;
   }
 });
 export default router;
