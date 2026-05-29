@@ -4,19 +4,11 @@ import booksType from './booksType.js';
 const router: Router = express.Router();
 router.use("/type",booksType);
 router.post("/add",async(req: Request,res: Response) => {
-  const User = z.object({
-    name:z.string()
-  });
-  const input = {};
-  try{
-
-  const data = User.safeParse(input);
-  console.log(data.error!.issues);
-  }catch(e){
-    if(e instanceof z.ZodError){
-      // console.log(e.issues);
-    }
-  }
+const {title,type,author,publisher,publishTime,price,pageNum,introduction,cover} = req.body;
+  const numberWithCatch = z.number().catch(30);
+  const result = numberWithCatch.safeParse("1");
+  console.log(result);
+  // type PlayerType = z.infer<typeof Player>
   res.json({
     status:0,
     message:"添加成功"
