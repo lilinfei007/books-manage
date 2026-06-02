@@ -34,7 +34,7 @@ router.delete("/delete/:_id",async (req:Request,res:Response) => {
       message:"_id不能为空"
     });
   }
-  try{
+  try{  
     await BooksModel.findByIdAndDelete(req.params._id);
     res.json({
       status:0,
@@ -45,12 +45,80 @@ router.delete("/delete/:_id",async (req:Request,res:Response) => {
   }
 });
 
-router.get("/list",async (req:Request,res:Response) => { 
+router.put('/update/:_id',async (req:Request,res:Response) => {
+  let _id = req.params._id;
+  if(!_id) return res.json({
+    status:1,
+    message:"_id不能为空"
+  });
+  // console.log(zBooksSchema.partial);
+  const partialBooks = zBooksSchema.partial();
+  const result = partialBooks.safeParse(req.body);
+  if(!result.success){
+    throw new Error(result.error.issues[0]!.message);
+  }
   try{
-    let list = await BooksModel.find({},{__v:0}).lean();
+    await BooksModel.updateOne({_id},result.data)
     res.json({
       status:0,
-      data:list
+      message:"更新成功"
+    });
+  }catch(e){
+    throw e;
+  }
+})  
+
+router.get("/list",async (req:Request,res:Response) => { 
+  try{
+    const {name = "",author = "",type = "",page = "1",pageSize = "10"} = req.query;
+    const matchCondition: Record<string,any> = {};
+    if(name){
+      matchCondition.name = new RegExp(<string>name);
+    }
+
+    if(author){
+      matchCondition.author = new RegExp(<string>author);
+    }
+
+    if(type){
+      matchCondition.type = new mongoose.Types.ObjectId(<string>type);
+    }
+    let list = await BooksModel.aggregate([{
+      $match:matchCondition,
+    },{
+      $project:{
+        __v:0
+      }
+    },{
+      $sort:{
+        created_time:-1
+      }
+    },{
+      $facet:{
+        "list":[
+          {$skip:parseInt(<string>page) * parseInt(<string>pageSize) - parseInt(<string>pageSize)},
+          {$limit:parseInt(<string>pageSize)},
+        ],
+        "count":[{
+          $count:"count"
+        }]
+      }
+    },{
+      $project:{
+        list:1,
+        total:{
+          $ifNull:[{$arrayElemAt:["$count.count",0]},0]
+        }
+      }
+    }]);
+    res.json({
+      status:0,
+      data:{
+        list:list[0].list,
+        page:parseInt(<string>page),
+        pageSize:parseInt(<string>pageSize),
+        total:list[0].total
+      }
     });
   }catch(e){
     throw e;
@@ -63,7 +131,6 @@ router.post("/add",async(req: Request,res: Response) => {
   }
   try{
   const doc = await new BooksModel({...result.data});
-  console.log(doc)
   await doc.save();
   res.json({
     status:0,

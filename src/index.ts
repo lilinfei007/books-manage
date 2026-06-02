@@ -3,8 +3,12 @@ import 'express-async-errors';
 import mountedRouter from './router/index.ts';
 import middleware from './middleware/index.ts';
 import { connect } from './db.ts';
+import { fileURLToPath } from 'url';
+import {dirname} from 'path';
 try{
   await connect();
+  // console.log(dirname(fileURLToPath(import.meta.url)));
+  // console.log(process.uptime())
   const app = express();
   middleware(app);
   mountedRouter(app);
