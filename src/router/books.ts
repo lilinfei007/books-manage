@@ -25,7 +25,9 @@ const zBooksSchema = z.object({
   name: z.string("name为字符串").min(1,"name不能为空"),
   author: z.string("author为字符串").min(1,"author不能为空"),
   type: z.string("type为字符串").min(1,"type不能为空")
-})
+});
+
+type zBooksType = z.infer<typeof zBooksSchema>
 
 router.delete("/delete/:_id",async (req:Request,res:Response) => {
   if(!req.params._id){
@@ -68,62 +70,60 @@ router.put('/update/:_id',async (req:Request,res:Response) => {
   }
 })  
 
-router.get("/list",async (req:Request,res:Response) => { 
+type BooksListQuery = Partial<zBooksType> & {
+  pageIndex?: string,
+  pageSize?: string
+}
+
+router.get("/list",async(req,res) => {
   try{
-    const {name = "",author = "",type = "",page = "1",pageSize = "10"} = req.query;
+    const { name = "",author = "",type = "", pageIndex = "0",pageSize = "10" } = <BooksListQuery>req.query;
     const matchCondition: Record<string,any> = {};
     if(name){
-      matchCondition.name = new RegExp(<string>name);
+      matchCondition.name = new RegExp(name)
     }
-
     if(author){
-      matchCondition.author = new RegExp(<string>author);
+      matchCondition.author = new RegExp(author)
     }
 
     if(type){
-      matchCondition.type = new mongoose.Types.ObjectId(<string>type);
+      matchCondition.type = new mongoose.Types.ObjectId(type);
     }
-    let list = await BooksModel.aggregate([{
-      $match:matchCondition,
-    },{
-      $project:{
-        __v:0
-      }
-    },{
-      $sort:{
-        created_time:-1
-      }
-    },{
-      $facet:{
-        "list":[
-          {$skip:parseInt(<string>page) * parseInt(<string>pageSize) - parseInt(<string>pageSize)},
-          {$limit:parseInt(<string>pageSize)},
+    // const list = await BooksModel.find({},{__v:0}).lean();
+    let list = await BooksModel.aggregate([
+      { $match: matchCondition},
+      { $facet:{
+        list:[
+          {$skip: parseInt(pageIndex) * parseInt(pageSize)},
+          {$limit: parseInt(pageSize) },
+          { $project:{ "__v": 0} }
         ],
-        "count":[{
-          $count:"count"
-        }]
-      }
-    },{
-      $project:{
+        count:[{$count:"count"}]
+      }},
+      { $project:{
         list:1,
+        // count:0,
         total:{
-          $ifNull:[{$arrayElemAt:["$count.count",0]},0]
+          $first:"$count.count"
+          // $arrayElemAt:["$count.count",0]
         }
-      }
-    }]);
+      }}
+    ]);
+    console.log(list)
     res.json({
       status:0,
       data:{
         list:list[0].list,
-        page:parseInt(<string>page),
-        pageSize:parseInt(<string>pageSize),
+        pageIndex:parseInt(pageIndex),
+        pageSize:parseInt(pageSize),
         total:list[0].total
       }
     });
-  }catch(e){
-    throw e;
+  }catch(error){
+    throw error;
   }
-});
+})
+
 router.post("/add",async(req: Request,res: Response) => {
   const result = zBooksSchema.safeParse(req.body);
   if(!result.success){
